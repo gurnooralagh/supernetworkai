@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+supabase
+openai
+groq
+resend
+python-dotenv
+pydantic
