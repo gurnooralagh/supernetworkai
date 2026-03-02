@@ -12,7 +12,7 @@ AI-powered matchmaking for cofounders, teammates, and top management. Uses Ikiga
 
 ## Loom Videos
 - **Video 1:** https://www.loom.com/share/60a39f1b3f8642828a06baab85838f46
-- **Video 2:** https://www.loom.com/share/b3348185612e4893a737edf9319d4807
+- **Video 2:** https://www.loom.com/share/b11cce54ce884e8eaad1f76e72ee2095
 
 ## Test Accounts
 Use these to log in to the live app or test the API directly.
