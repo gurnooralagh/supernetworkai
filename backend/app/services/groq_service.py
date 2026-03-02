@@ -136,6 +136,58 @@ def _score_candidate(current_user: dict, candidate: dict, search_query: str | No
         return None
 
 
+def generate_profile_summary(profile: dict) -> str:
+    name = profile.get("name", "This person")
+    headline = profile.get("headline", "")
+    bio = profile.get("bio", "")
+    intent = profile.get("intent", "")
+    ikigai_passion_1 = profile.get("ikigai_passion_1", "")
+    ikigai_passion_2 = profile.get("ikigai_passion_2", "")
+    ikigai_strength_1 = profile.get("ikigai_strength_1", "")
+    ikigai_strength_2 = profile.get("ikigai_strength_2", "")
+    ikigai_mission_1 = profile.get("ikigai_mission_1", "")
+    ikigai_mission_2 = profile.get("ikigai_mission_2", "")
+    ikigai_vocation_1 = profile.get("ikigai_vocation_1", "")
+    ikigai_vocation_2 = profile.get("ikigai_vocation_2", "")
+    collab_1 = profile.get("collaboration_fit_1", "")
+    collab_2 = profile.get("collaboration_fit_2", "")
+    collab_3 = profile.get("collaboration_fit_3", "")
+    portfolio_what = profile.get("portfolio_what", "")
+    portfolio_learning = profile.get("portfolio_learning", "")
+
+    prompt = (
+        "You are helping generate a second-person profile summary for a professional networking platform. "
+        "Based on this person's profile data, write a 3-4 sentence summary in second person (starting with 'You are...') "
+        "that captures who they are, what they've built, what drives them, and what they're looking for. "
+        "Be specific and use details from their profile. Do not use generic language.\n\n"
+        f"Name: {name}\n"
+        f"Headline: {headline}\n"
+        f"Bio: {bio}\n"
+        f"Intent: {intent}\n"
+        f"Passion (1): {ikigai_passion_1}\n"
+        f"Passion (2): {ikigai_passion_2}\n"
+        f"Strength (1): {ikigai_strength_1}\n"
+        f"Strength (2): {ikigai_strength_2}\n"
+        f"Mission (1): {ikigai_mission_1}\n"
+        f"Mission (2): {ikigai_mission_2}\n"
+        f"Vocation (1): {ikigai_vocation_1}\n"
+        f"Vocation (2): {ikigai_vocation_2}\n"
+        f"Collaboration fit (1): {collab_1}\n"
+        f"Collaboration fit (2): {collab_2}\n"
+        f"Collaboration fit (3): {collab_3}\n"
+        f"Portfolio — what they built: {portfolio_what}\n"
+        f"Portfolio — biggest learning: {portfolio_learning}"
+    )
+
+    response = _groq.chat.completions.create(
+        model=MODEL,
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.4,
+        max_tokens=250,
+    )
+    return response.choices[0].message.content.strip()
+
+
 def rank_matches(
     current_user_profile: dict,
     candidate_profiles: list[dict],

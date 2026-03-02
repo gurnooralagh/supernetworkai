@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from app.database import get_client
 from app.models.profile import ProfileCreate, ProfileResponse
 from app.services.embedding import generate_embedding, store_embedding
+from app.services.groq_service import generate_profile_summary
 from app.routers.match import compute_matches, ComputeRequest
 
 router = APIRouter(prefix="/profile", tags=["profile"])
@@ -63,10 +64,15 @@ def get_profile(user_id: str):
 def confirm_summary(user_id: str, body: ConfirmSummaryRequest):
     client = get_client()
 
+    summary = body.profile_summary
+    if not summary:
+        profile = _fetch_profile_by_user(user_id)
+        summary = generate_profile_summary(profile)
+
     result = (
         client.table("profiles")
         .update({
-            "profile_summary": body.profile_summary,
+            "profile_summary": summary,
             "profile_summary_confirmed": True,
         })
         .eq("user_id", user_id)
@@ -89,7 +95,7 @@ def confirm_summary(user_id: str, body: ConfirmSummaryRequest):
     except Exception:
         pass
 
-    return {"confirmed": True}
+    return {"confirmed": True, "profile_summary": summary}
 
 
 @router.post("/{user_id}/embed")
