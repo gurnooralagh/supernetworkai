@@ -15,13 +15,12 @@ AI-powered matchmaking for cofounders, teammates, and top management. Uses Ikiga
 - **Video 2:** https://www.loom.com/share/b3348185612e4893a737edf9319d4807
 
 ## Test Accounts
-| Name | Email | Password |
-|------|-------|----------|
-| Dr. Sarah Kim | sarah.kim@example.com | SeedPassword123! |
-| Priya Sharma | priya.sharma@example.com | SeedPassword123! |
-| Marcus Webb | marcus.webb@example.com | SeedPassword123! |
-| Luca Ferrari | luca.ferrari@example.com | SeedPassword123! |
-| James Okafor | james.okafor@example.com | SeedPassword123! |
+Use these to log in to the live app or test the API directly.
+
+| Name | Email | Password | User ID |
+|------|-------|----------|---------|
+| Dr. Sarah Kim | sarah.kim@example.com | SeedPassword123! | 20223f3a-4842-4a6e-8348-ff20ec9c7d29 |
+| James Okafor | james.okafor@example.com | SeedPassword123! | 141f2025-0073-41f0-b286-7c74f73796e9 |
 
 ## Tech Stack
 - **Frontend:** React + Lovable
