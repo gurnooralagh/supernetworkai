@@ -10,6 +10,10 @@ AI-powered matchmaking for cofounders, teammates, and top management. Uses Ikiga
 - **App:** https://superrnetworkai.lovable.app
 - **Backend API docs:** https://supernetworkai-production.up.railway.app/docs
 
+## Loom Videos
+- **Video 1:** https://www.loom.com/share/60a39f1b3f8642828a06baab85838f46
+- **Video 2:** https://www.loom.com/share/b3348185612e4893a737edf9319d4807
+
 ## Test Accounts
 | Name | Email | Password |
 |------|-------|----------|
