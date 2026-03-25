@@ -31,6 +31,10 @@ const Onboarding = () => {
         return;
       }
       setUserId(session.user.id);
+      // Pre-fill contact_email so Connect emails can reach the user
+      if (session.user.email) {
+        setFormData((prev) => ({ ...prev, contact_email: session.user.email }));
+      }
     };
     checkAuth();
   }, [navigate]);
