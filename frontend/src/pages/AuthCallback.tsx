@@ -8,40 +8,32 @@ const AuthCallback = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const handleCallback = async () => {
-      // Supabase processes the URL hash automatically; wait for the session
-      const { data: { session } } = await supabase.auth.getSession();
-
-      if (!session) {
-        // Give it a moment for the hash to be processed
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-        const { data: { session: retried } } = await supabase.auth.getSession();
-        if (!retried) {
-          navigate("/login");
-          return;
+    // Listen for Supabase to process the confirmation link (hash or PKCE code)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (event === "SIGNED_IN" && session) {
+          subscription.unsubscribe();
+          try {
+            const res = await fetch(`${BACKEND_URL}/profile/${session.user.id}`);
+            navigate(res.ok ? "/discover" : "/onboarding", { replace: true });
+          } catch {
+            navigate("/onboarding", { replace: true });
+          }
         }
       }
+    );
 
-      const userId = session?.user.id ?? (await supabase.auth.getSession()).data.session?.user.id;
-      if (!userId) {
-        navigate("/login");
-        return;
+    // Also check if already signed in (e.g. session already processed)
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        subscription.unsubscribe();
+        fetch(`${BACKEND_URL}/profile/${session.user.id}`)
+          .then((res) => navigate(res.ok ? "/discover" : "/onboarding", { replace: true }))
+          .catch(() => navigate("/onboarding", { replace: true }));
       }
+    });
 
-      // Check if profile exists
-      try {
-        const res = await fetch(`${BACKEND_URL}/profile/${userId}`);
-        if (res.ok) {
-          navigate("/discover");
-        } else {
-          navigate("/onboarding");
-        }
-      } catch {
-        navigate("/onboarding");
-      }
-    };
-
-    handleCallback();
+    return () => subscription.unsubscribe();
   }, [navigate]);
 
   return (
