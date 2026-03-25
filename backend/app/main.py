@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.routers import match, connect, profile
 
-app = FastAPI(title="SuperNetworkAI")
+app = FastAPI(title="SuperNetworkAI", redirect_slashes=False)
 
 app.add_middleware(
     CORSMiddleware,
