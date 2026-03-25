@@ -8,6 +8,7 @@ app = FastAPI(title="SuperNetworkAI")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
+        "https://supernetworkai-app.vercel.app",
         "https://supernetworkai.lovable.app",
         "http://localhost:3000",
         "http://localhost:5173",
