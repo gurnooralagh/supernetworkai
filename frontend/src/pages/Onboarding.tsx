@@ -68,7 +68,7 @@ const Onboarding = () => {
     setSummaryLoading(true);
     try {
       // Step 1: Save profile data
-      const saveRes = await fetch(`${BACKEND_URL}/profile?user_id=${userId}`, {
+      const saveRes = await fetch(`${BACKEND_URL}/profile/?user_id=${userId}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
