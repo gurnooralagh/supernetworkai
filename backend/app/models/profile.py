@@ -113,7 +113,7 @@ class ProfileResponse(BaseModel):
     linkedin_url: Optional[str] = None
     github_url: Optional[str] = None
     portfolio_url: Optional[str] = None
-    contact_email: Optional[str] = None
+    # contact_email intentionally excluded — never returned by public API
 
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
