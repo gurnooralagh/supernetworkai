@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
+
+const BACKEND_URL = "https://supernetworkai-production.up.railway.app";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -34,15 +36,11 @@ const Profile = () => {
 
       const targetId = paramUserId === "me" ? session.user.id : paramUserId;
 
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("user_id", targetId)
-        .single();
-
-      if (error || !data) {
+      const res = await fetch(`${BACKEND_URL}/profile/${targetId}`);
+      if (!res.ok) {
         setProfile(null);
       } else {
+        const data = await res.json();
         setProfile(data);
       }
       setLoading(false);

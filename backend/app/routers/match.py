@@ -117,4 +117,4 @@ def search_matches(body: SearchRequest):
 
     ranked = rank_matches(current_profile, candidates, search_query=body.search_query)
 
-    return {"matches": ranked}
+    return ranked

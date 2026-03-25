@@ -27,7 +27,7 @@ const ConnectModal = ({ open, onOpenChange, requesterId, receiverId, receiverNam
   const handleSend = async () => {
     setSending(true);
     try {
-      const res = await fetch(`${BACKEND_URL}/connect`, {
+      const res = await fetch(`${BACKEND_URL}/connect/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

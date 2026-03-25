@@ -65,16 +65,20 @@ def confirm_summary(user_id: str, body: ConfirmSummaryRequest):
     client = get_client()
 
     summary = body.profile_summary
+    # Empty summary = auto-generate call (user hasn't confirmed yet)
+    is_confirming = bool(summary)
+
     if not summary:
         profile = _fetch_profile_by_user(user_id)
         summary = generate_profile_summary(profile)
 
+    update_payload: dict = {"profile_summary": summary}
+    if is_confirming:
+        update_payload["profile_summary_confirmed"] = True
+
     result = (
         client.table("profiles")
-        .update({
-            "profile_summary": summary,
-            "profile_summary_confirmed": True,
-        })
+        .update(update_payload)
         .eq("user_id", user_id)
         .execute()
     )
@@ -82,20 +86,21 @@ def confirm_summary(user_id: str, body: ConfirmSummaryRequest):
     if not result.data:
         raise HTTPException(status_code=404, detail="Profile not found or update failed")
 
-    updated_profile = result.data[0]
+    # Only run embedding + matching after user actually confirms
+    if is_confirming:
+        updated_profile = result.data[0]
+        try:
+            embedding = generate_embedding(updated_profile)
+            store_embedding(user_id, embedding)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Embedding generation failed: {str(e)}")
 
-    try:
-        embedding = generate_embedding(updated_profile)
-        store_embedding(user_id, embedding)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Embedding generation failed: {str(e)}")
+        try:
+            compute_matches(ComputeRequest(current_user_id=user_id))
+        except Exception:
+            pass
 
-    try:
-        compute_matches(ComputeRequest(current_user_id=user_id))
-    except Exception:
-        pass
-
-    return {"confirmed": True, "profile_summary": summary}
+    return {"confirmed": is_confirming, "profile_summary": summary}
 
 
 @router.post("/{user_id}/embed")

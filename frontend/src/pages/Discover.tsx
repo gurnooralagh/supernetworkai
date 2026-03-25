@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
+
+const BACKEND_URL = "https://supernetworkai-production.up.railway.app";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -85,17 +87,13 @@ const Discover = () => {
     }
 
     const matchedIds = data.map((m) => m.matched_user_id);
-    const { data: profiles, error: profilesError } = await supabase
-      .from("profiles")
-      .select("user_id, name, headline, avatar_url, location")
-      .in("user_id", matchedIds);
-
-    if (profilesError) {
-      console.error("Profiles fetch error:", profilesError);
-    }
-
+    const profileResults = await Promise.all(
+      matchedIds.map((id) =>
+        fetch(`${BACKEND_URL}/profile/${id}`).then((r) => r.ok ? r.json() : null).catch(() => null)
+      )
+    );
     const profileMap = new Map(
-      (profiles || []).map((p: any) => [p.user_id, p])
+      profileResults.filter(Boolean).map((p: any) => [p.user_id, p])
     );
 
     const enriched: Match[] = data.map((m) => ({
@@ -137,13 +135,13 @@ const Discover = () => {
       const results = await res.json();
 
       const matchedIds = results.map((r: any) => r.matched_user_id);
-      const { data: profiles } = await supabase
-        .from("profiles")
-        .select("user_id, name, headline, avatar_url")
-        .in("user_id", matchedIds);
-
+      const profileResults = await Promise.all(
+        matchedIds.map((id: string) =>
+          fetch(`${BACKEND_URL}/profile/${id}`).then((r) => r.ok ? r.json() : null).catch(() => null)
+        )
+      );
       const profileMap = new Map(
-        (profiles || []).map((p: any) => [p.user_id, p])
+        profileResults.filter(Boolean).map((p: any) => [p.user_id, p])
       );
 
       const enriched: Match[] = results.map((r: any) => ({
