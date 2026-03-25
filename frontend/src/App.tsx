@@ -11,6 +11,7 @@ import ResetPassword from "./pages/ResetPassword";
 import Discover from "./pages/Discover";
 import Onboarding from "./pages/Onboarding";
 import Profile from "./pages/Profile";
+import AuthCallback from "./pages/AuthCallback";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -30,6 +31,7 @@ const App = () => (
           <Route path="/onboarding" element={<Onboarding />} />
           <Route path="/discover" element={<Discover />} />
           <Route path="/profile/:userId" element={<Profile />} />
+          <Route path="/auth/callback" element={<AuthCallback />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
