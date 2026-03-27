@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel
 
 from app.database import get_client
@@ -60,8 +60,20 @@ def get_profile(user_id: str):
     return _fetch_profile_by_user(user_id)
 
 
+def _post_confirm_tasks(user_id: str, profile: dict) -> None:
+    try:
+        embedding = generate_embedding(profile)
+        store_embedding(user_id, embedding)
+    except Exception:
+        pass
+    try:
+        compute_matches(ComputeRequest(current_user_id=user_id))
+    except Exception:
+        pass
+
+
 @router.post("/{user_id}/confirm-summary")
-def confirm_summary(user_id: str, body: ConfirmSummaryRequest):
+def confirm_summary(user_id: str, body: ConfirmSummaryRequest, background_tasks: BackgroundTasks):
     client = get_client()
 
     summary = body.profile_summary
@@ -86,19 +98,9 @@ def confirm_summary(user_id: str, body: ConfirmSummaryRequest):
     if not result.data:
         raise HTTPException(status_code=404, detail="Profile not found or update failed")
 
-    # Only run embedding + matching after user actually confirms
+    # Fire embedding + matching in background so response returns immediately
     if is_confirming:
-        updated_profile = result.data[0]
-        try:
-            embedding = generate_embedding(updated_profile)
-            store_embedding(user_id, embedding)
-        except Exception:
-            pass
-
-        try:
-            compute_matches(ComputeRequest(current_user_id=user_id))
-        except Exception:
-            pass
+        background_tasks.add_task(_post_confirm_tasks, user_id, result.data[0])
 
     return {"confirmed": is_confirming, "profile_summary": summary}
 
