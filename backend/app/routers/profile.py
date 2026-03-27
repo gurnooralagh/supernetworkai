@@ -92,8 +92,8 @@ def confirm_summary(user_id: str, body: ConfirmSummaryRequest):
         try:
             embedding = generate_embedding(updated_profile)
             store_embedding(user_id, embedding)
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Embedding generation failed: {str(e)}")
+        except Exception:
+            pass
 
         try:
             compute_matches(ComputeRequest(current_user_id=user_id))
