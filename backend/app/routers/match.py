@@ -144,7 +144,7 @@ def search_matches(body: SearchRequest):
 def search_profiles(body: SearchRequest):
     """Vector search only — no Groq scoring. Returns profiles ordered by embedding similarity."""
     query_embedding = generate_query_embedding(body.search_query)
-    return _vector_search(query_embedding, body.current_user_id, min_similarity=0.35)
+    return _vector_search(query_embedding, body.current_user_id, min_similarity=0.25)
 
 
 @router.post("/score-pair")
