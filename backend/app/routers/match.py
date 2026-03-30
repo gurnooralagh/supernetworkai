@@ -140,11 +140,30 @@ def search_matches(body: SearchRequest):
     return ranked
 
 
+def _name_search(query: str, exclude_user_id: str) -> list[dict]:
+    client = get_client()
+    result = (
+        client.table("profiles")
+        .select("*")
+        .ilike("name", f"%{query}%")
+        .neq("user_id", exclude_user_id)
+        .execute()
+    )
+    return result.data or []
+
+
 @router.post("/search-profiles")
 def search_profiles(body: SearchRequest):
-    """Vector search only — no Groq scoring. Returns profiles ordered by embedding similarity."""
+    """Name + vector search. Name matches appear first, then embedding similarity results."""
+    name_matches = _name_search(body.search_query, body.current_user_id)
+    name_match_ids = {p["user_id"] for p in name_matches}
+
     query_embedding = generate_query_embedding(body.search_query)
-    return _vector_search(query_embedding, body.current_user_id, min_similarity=0.25)
+    vector_matches = _vector_search(query_embedding, body.current_user_id, min_similarity=0.25)
+
+    # Name matches first, then vector matches not already in name results
+    combined = name_matches + [p for p in vector_matches if p["user_id"] not in name_match_ids]
+    return combined
 
 
 @router.post("/score-pair")
