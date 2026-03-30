@@ -1,15 +1,16 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
-
-const BACKEND_URL = "https://supernetworkai-production.up.railway.app";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Search, X, User, Zap } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Search, User, Zap, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import ConnectModal from "@/components/ConnectModal";
+
+const BACKEND_URL = "https://supernetworkai-production.up.railway.app";
 
 interface MatchProfile {
   id: string;
@@ -31,6 +32,21 @@ interface Match {
   profile: MatchProfile | null;
 }
 
+interface SearchProfile {
+  user_id: string;
+  name: string;
+  headline: string | null;
+  avatar_url: string | null;
+  location: string | null;
+  profile_summary: string | null;
+}
+
+interface PairScore {
+  overall_score: number;
+  best_category: string | null;
+  explanation: string | null;
+}
+
 const CATEGORY_LABELS: Record<string, string> = {
   cofounder: "Cofounder",
   teammate: "Teammate",
@@ -46,12 +62,19 @@ const CATEGORY_COLORS: Record<string, string> = {
 const Discover = () => {
   const navigate = useNavigate();
   const [userId, setUserId] = useState<string | null>(null);
+
+  // My Matches state
   const [matches, setMatches] = useState<Match[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loadingMatches, setLoadingMatches] = useState(true);
+  const [connectTarget, setConnectTarget] = useState<{ id: string; name: string } | null>(null);
+
+  // Search state
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearching, setIsSearching] = useState(false);
-  const [isSearchActive, setIsSearchActive] = useState(false);
-  const [connectTarget, setConnectTarget] = useState<{ id: string; name: string } | null>(null);
+  const [searchResults, setSearchResults] = useState<SearchProfile[]>([]);
+  const [hasSearched, setHasSearched] = useState(false);
+  const [pairScores, setPairScores] = useState<Record<string, PairScore | null>>({});
+  const [checkingPair, setCheckingPair] = useState<string | null>(null);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -67,7 +90,7 @@ const Discover = () => {
   }, [navigate]);
 
   const fetchMatches = async (uid: string) => {
-    setLoading(true);
+    setLoadingMatches(true);
     const { data, error } = await supabase
       .from("matches")
       .select("id, matched_user_id, overall_score, best_category, explanation, cofounder_score, teammate_score, top_management_score")
@@ -76,13 +99,13 @@ const Discover = () => {
 
     if (error) {
       toast.error("Failed to load matches");
-      setLoading(false);
+      setLoadingMatches(false);
       return;
     }
 
     if (!data || data.length === 0) {
       setMatches([]);
-      setLoading(false);
+      setLoadingMatches(false);
       return;
     }
 
@@ -110,7 +133,7 @@ const Discover = () => {
     }));
 
     setMatches(enriched);
-    setLoading(false);
+    setLoadingMatches(false);
   };
 
   const handleSearch = async (e: React.FormEvent) => {
@@ -118,45 +141,27 @@ const Discover = () => {
     if (!searchQuery.trim() || !userId) return;
 
     setIsSearching(true);
-    setIsSearchActive(true);
+    setHasSearched(true);
+    setPairScores({});
 
     try {
-      const res = await fetch("https://supernetworkai-production.up.railway.app/match/search", {
+      const res = await fetch(`${BACKEND_URL}/match/search-profiles`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          current_user_id: userId,
-          search_query: searchQuery.trim(),
-        }),
+        body: JSON.stringify({ current_user_id: userId, search_query: searchQuery.trim() }),
       });
 
       if (!res.ok) throw new Error("Search failed");
 
-      const results = await res.json();
-
-      const matchedIds = results.map((r: any) => r.matched_user_id);
-      const profileResults = await Promise.all(
-        matchedIds.map((id: string) =>
-          fetch(`${BACKEND_URL}/profile/${id}`).then((r) => r.ok ? r.json() : null).catch(() => null)
-        )
-      );
-      const profileMap = new Map(
-        profileResults.filter(Boolean).map((p: any) => [p.user_id, p])
-      );
-
-      const enriched: Match[] = results.map((r: any) => ({
-        ...r,
-        profile: profileMap.get(r.matched_user_id)
-          ? {
-              id: r.matched_user_id,
-              name: profileMap.get(r.matched_user_id)!.name,
-              headline: profileMap.get(r.matched_user_id)!.headline,
-              avatar_url: profileMap.get(r.matched_user_id)!.avatar_url,
-            }
-          : null,
-      }));
-
-      setMatches(enriched);
+      const profiles: any[] = await res.json();
+      setSearchResults(profiles.map((p) => ({
+        user_id: p.user_id,
+        name: p.name,
+        headline: p.headline ?? null,
+        avatar_url: p.avatar_url ?? null,
+        location: p.location ?? null,
+        profile_summary: p.profile_summary ?? null,
+      })));
     } catch {
       toast.error("Search failed. Is the backend running?");
     } finally {
@@ -164,10 +169,30 @@ const Discover = () => {
     }
   };
 
-  const clearSearch = () => {
-    setSearchQuery("");
-    setIsSearchActive(false);
-    if (userId) fetchMatches(userId);
+  const handleCheckMatch = async (targetUserId: string) => {
+    if (!userId) return;
+    setCheckingPair(targetUserId);
+    try {
+      const res = await fetch(`${BACKEND_URL}/match/score-pair`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ current_user_id: userId, target_user_id: targetUserId }),
+      });
+      if (!res.ok) throw new Error("Scoring failed");
+      const data = await res.json();
+      setPairScores((prev) => ({
+        ...prev,
+        [targetUserId]: {
+          overall_score: data.overall_score,
+          best_category: data.best_category,
+          explanation: data.explanation,
+        },
+      }));
+    } catch {
+      toast.error("Could not score this match. Try again.");
+    } finally {
+      setCheckingPair(null);
+    }
   };
 
   return (
@@ -197,91 +222,144 @@ const Discover = () => {
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-6 py-8 space-y-8">
-        {/* Title + Search */}
-        <div className="space-y-4">
-          <div>
-            <h2 className="text-2xl font-bold tracking-tight font-['Space_Grotesk']">
-              Your Matches
-            </h2>
-            <p className="text-muted-foreground text-sm mt-1">
-              People aligned with your goals, ranked by compatibility.
-            </p>
-          </div>
+      <main className="max-w-5xl mx-auto px-6 py-8">
+        <Tabs defaultValue="my-matches">
+          <TabsList className="mb-6">
+            <TabsTrigger value="my-matches">My Matches</TabsTrigger>
+            <TabsTrigger value="search">Search</TabsTrigger>
+          </TabsList>
 
-          <form onSubmit={handleSearch} className="flex gap-2">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search e.g. 'technical cofounder in climate tech'"
-                className="pl-10"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
+          {/* ── MY MATCHES TAB ── */}
+          <TabsContent value="my-matches" className="space-y-6">
+            <div>
+              <h2 className="text-2xl font-bold tracking-tight font-['Space_Grotesk']">Your Matches</h2>
+              <p className="text-muted-foreground text-sm mt-1">
+                People aligned with your goals, ranked by compatibility.
+              </p>
             </div>
-            <Button type="submit" disabled={isSearching || !searchQuery.trim()}>
-              {isSearching ? "Searching…" : "Search"}
-            </Button>
-            {isSearchActive && (
-              <Button type="button" variant="outline" onClick={clearSearch}>
-                <X className="h-4 w-4 mr-1" /> Clear
-              </Button>
-            )}
-          </form>
-        </div>
 
-        {/* Loading */}
-        {loading ? (
-          <div className="grid gap-4 md:grid-cols-2">
-            {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="rounded-xl border border-border bg-card p-6 space-y-4">
-                <div className="flex items-center gap-3">
-                  <Skeleton className="h-12 w-12 rounded-full" />
-                  <div className="space-y-2 flex-1">
-                    <Skeleton className="h-4 w-32" />
-                    <Skeleton className="h-3 w-48" />
+            {loadingMatches ? (
+              <div className="grid gap-4 md:grid-cols-2">
+                {[1, 2, 3, 4].map((i) => (
+                  <div key={i} className="rounded-xl border border-border bg-card p-6 space-y-4">
+                    <div className="flex items-center gap-3">
+                      <Skeleton className="h-12 w-12 rounded-full" />
+                      <div className="space-y-2 flex-1">
+                        <Skeleton className="h-4 w-32" />
+                        <Skeleton className="h-3 w-48" />
+                      </div>
+                    </div>
+                    <Skeleton className="h-16 w-full" />
                   </div>
-                </div>
-                <Skeleton className="h-16 w-full" />
+                ))}
               </div>
-            ))}
-          </div>
-        ) : matches.length === 0 ? (
-          <div className="text-center py-20 space-y-4">
-            <div className="mx-auto w-16 h-16 rounded-full bg-muted flex items-center justify-center">
-              <Zap className="h-7 w-7 text-muted-foreground" />
+            ) : matches.length === 0 ? (
+              <div className="text-center py-20 space-y-4">
+                <div className="mx-auto w-16 h-16 rounded-full bg-muted flex items-center justify-center">
+                  <Zap className="h-7 w-7 text-muted-foreground" />
+                </div>
+                <h3 className="text-lg font-medium font-['Space_Grotesk']">
+                  Your matches are being computed. Check back shortly.
+                </h3>
+                <p className="text-sm text-muted-foreground max-w-md mx-auto">
+                  Once your profile is processed, AI-ranked matches will appear here automatically.
+                </p>
+              </div>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2">
+                {matches.map((match) => (
+                  <MatchCard
+                    key={match.id}
+                    match={match}
+                    onCardClick={() => navigate(`/profile/${match.matched_user_id}`)}
+                    onConnect={() =>
+                      setConnectTarget({
+                        id: match.matched_user_id,
+                        name: match.profile?.name || "Unknown",
+                      })
+                    }
+                  />
+                ))}
+              </div>
+            )}
+          </TabsContent>
+
+          {/* ── SEARCH TAB ── */}
+          <TabsContent value="search" className="space-y-6">
+            <div>
+              <h2 className="text-2xl font-bold tracking-tight font-['Space_Grotesk']">Search Profiles</h2>
+              <p className="text-muted-foreground text-sm mt-1">
+                Find people by keyword. Then tap "Check Match" on anyone you like.
+              </p>
             </div>
-            <h3 className="text-lg font-medium font-['Space_Grotesk']">
-              {isSearchActive
-                ? "No results found"
-                : "Your matches are being computed. Check back shortly."}
-            </h3>
-            <p className="text-sm text-muted-foreground max-w-md mx-auto">
-              {isSearchActive
-                ? "Try a different search query."
-                : "Once your profile is processed, AI-ranked matches will appear here automatically."}
-            </p>
-          </div>
-        ) : (
-          <div className="grid gap-4 md:grid-cols-2">
-            {matches.map((match) => (
-              <MatchCard
-                key={match.id}
-                match={match}
-                onCardClick={() => navigate(`/profile/${match.matched_user_id}`)}
-                onConnect={() =>
-                  setConnectTarget({
-                    id: match.matched_user_id,
-                    name: match.profile?.name || "Unknown",
-                  })
-                }
-              />
-            ))}
-          </div>
-        )}
+
+            <form onSubmit={handleSearch} className="flex gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="e.g. 'technical cofounder in climate tech'"
+                  className="pl-10"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
+              <Button type="submit" disabled={isSearching || !searchQuery.trim()}>
+                {isSearching ? (
+                  <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Searching…</>
+                ) : (
+                  "Search"
+                )}
+              </Button>
+            </form>
+
+            {isSearching ? (
+              <div className="grid gap-4 md:grid-cols-2">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="rounded-xl border border-border bg-card p-6 space-y-4">
+                    <div className="flex items-center gap-3">
+                      <Skeleton className="h-12 w-12 rounded-full" />
+                      <div className="space-y-2 flex-1">
+                        <Skeleton className="h-4 w-32" />
+                        <Skeleton className="h-3 w-48" />
+                      </div>
+                    </div>
+                    <Skeleton className="h-12 w-full" />
+                  </div>
+                ))}
+              </div>
+            ) : hasSearched && searchResults.length === 0 ? (
+              <div className="text-center py-20 space-y-4">
+                <div className="mx-auto w-16 h-16 rounded-full bg-muted flex items-center justify-center">
+                  <Search className="h-7 w-7 text-muted-foreground" />
+                </div>
+                <h3 className="text-lg font-medium font-['Space_Grotesk']">No results found</h3>
+                <p className="text-sm text-muted-foreground">Try a different search query.</p>
+              </div>
+            ) : searchResults.length > 0 ? (
+              <div className="grid gap-4 md:grid-cols-2">
+                {searchResults.map((profile) => (
+                  <SearchProfileCard
+                    key={profile.user_id}
+                    profile={profile}
+                    pairScore={pairScores[profile.user_id]}
+                    isChecking={checkingPair === profile.user_id}
+                    onCardClick={() => navigate(`/profile/${profile.user_id}`)}
+                    onCheckMatch={() => handleCheckMatch(profile.user_id)}
+                    onConnect={() =>
+                      setConnectTarget({ id: profile.user_id, name: profile.name })
+                    }
+                  />
+                ))}
+              </div>
+            ) : !hasSearched ? (
+              <div className="text-center py-20 text-muted-foreground text-sm">
+                Enter a keyword above to find people.
+              </div>
+            ) : null}
+          </TabsContent>
+        </Tabs>
       </main>
 
-      {/* Connect modal */}
       {connectTarget && userId && (
         <ConnectModal
           open={!!connectTarget}
@@ -313,7 +391,6 @@ const MatchCard = ({
       onClick={onCardClick}
       className="rounded-xl border border-border bg-card p-6 space-y-4 hover:border-primary/30 transition-colors overflow-hidden cursor-pointer"
     >
-      {/* Top row */}
       <div className="flex items-start justify-between gap-3 overflow-hidden">
         <div className="flex items-center gap-3 min-w-0 flex-1">
           {match.profile?.avatar_url ? (
@@ -332,18 +409,13 @@ const MatchCard = ({
               {match.profile?.name || "Unknown"}
             </p>
             {match.profile?.headline && (
-              <p className="text-sm text-muted-foreground break-words">
-                {match.profile.headline}
-              </p>
+              <p className="text-sm text-muted-foreground break-words">{match.profile.headline}</p>
             )}
             {match.profile?.location && (
-              <p className="text-xs text-muted-foreground/70 break-words">
-                📍 {match.profile.location}
-              </p>
+              <p className="text-xs text-muted-foreground/70 break-words">📍 {match.profile.location}</p>
             )}
           </div>
         </div>
-
         <div className="text-right shrink-0 ml-3">
           <span className="text-2xl font-bold gradient-text font-['Space_Grotesk']">
             {Math.round(match.overall_score)}%
@@ -351,29 +423,119 @@ const MatchCard = ({
         </div>
       </div>
 
-      {/* Badge */}
-      <Badge variant="outline" className={`text-xs ${colorClass}`}>
-        {label}
-      </Badge>
+      <Badge variant="outline" className={`text-xs ${colorClass}`}>{label}</Badge>
 
-      {/* Explanation */}
       {match.explanation && (
-        <p className="text-sm text-muted-foreground leading-relaxed">
-          {match.explanation}
-        </p>
+        <p className="text-sm text-muted-foreground leading-relaxed">{match.explanation}</p>
       )}
 
-      {/* Connect */}
       <Button
         className="w-full glow-primary"
         size="sm"
-        onClick={(e) => {
-          e.stopPropagation();
-          onConnect();
-        }}
+        onClick={(e) => { e.stopPropagation(); onConnect(); }}
       >
         Connect
       </Button>
+    </div>
+  );
+};
+
+const SearchProfileCard = ({
+  profile,
+  pairScore,
+  isChecking,
+  onCardClick,
+  onCheckMatch,
+  onConnect,
+}: {
+  profile: SearchProfile;
+  pairScore: PairScore | null | undefined;
+  isChecking: boolean;
+  onCardClick: () => void;
+  onCheckMatch: () => void;
+  onConnect: () => void;
+}) => {
+  const category = pairScore?.best_category || "teammate";
+  const label = CATEGORY_LABELS[category] || category;
+  const colorClass = CATEGORY_COLORS[category] || CATEGORY_COLORS.teammate;
+
+  return (
+    <div
+      onClick={onCardClick}
+      className="rounded-xl border border-border bg-card p-6 space-y-4 hover:border-primary/30 transition-colors overflow-hidden cursor-pointer"
+    >
+      <div className="flex items-start justify-between gap-3 overflow-hidden">
+        <div className="flex items-center gap-3 min-w-0 flex-1">
+          {profile.avatar_url ? (
+            <img
+              src={profile.avatar_url}
+              alt={profile.name}
+              className="h-12 w-12 rounded-full object-cover border border-border"
+            />
+          ) : (
+            <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
+              <User className="h-5 w-5 text-muted-foreground" />
+            </div>
+          )}
+          <div className="min-w-0">
+            <p className="font-semibold text-foreground break-words">{profile.name}</p>
+            {profile.headline && (
+              <p className="text-sm text-muted-foreground break-words">{profile.headline}</p>
+            )}
+            {profile.location && (
+              <p className="text-xs text-muted-foreground/70 break-words">📍 {profile.location}</p>
+            )}
+          </div>
+        </div>
+
+        {pairScore && (
+          <div className="text-right shrink-0 ml-3">
+            <span className="text-2xl font-bold gradient-text font-['Space_Grotesk']">
+              {Math.round(pairScore.overall_score)}%
+            </span>
+          </div>
+        )}
+      </div>
+
+      {profile.profile_summary && !pairScore && (
+        <p className="text-sm text-muted-foreground leading-relaxed line-clamp-3">
+          {profile.profile_summary}
+        </p>
+      )}
+
+      {pairScore && (
+        <>
+          <Badge variant="outline" className={`text-xs ${colorClass}`}>{label}</Badge>
+          {pairScore.explanation && (
+            <p className="text-sm text-muted-foreground leading-relaxed">{pairScore.explanation}</p>
+          )}
+        </>
+      )}
+
+      <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
+        {!pairScore && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="flex-1"
+            disabled={isChecking}
+            onClick={onCheckMatch}
+          >
+            {isChecking ? (
+              <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Checking…</>
+            ) : (
+              "Check Match"
+            )}
+          </Button>
+        )}
+        <Button
+          className={`glow-primary ${pairScore ? "w-full" : "flex-1"}`}
+          size="sm"
+          onClick={onConnect}
+        >
+          Connect
+        </Button>
+      </div>
     </div>
   );
 };

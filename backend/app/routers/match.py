@@ -3,7 +3,7 @@ from pydantic import BaseModel
 
 from app.database import get_client
 from app.services.embedding import generate_query_embedding
-from app.services.groq_service import rank_matches
+from app.services.groq_service import rank_matches, _score_candidate
 
 router = APIRouter(prefix="/match", tags=["match"])
 
@@ -17,6 +17,11 @@ class ComputeRequest(BaseModel):
 class SearchRequest(BaseModel):
     current_user_id: str
     search_query: str
+
+
+class ScorePairRequest(BaseModel):
+    current_user_id: str
+    target_user_id: str
 
 
 def _fetch_profile(user_id: str) -> dict:
@@ -118,3 +123,25 @@ def search_matches(body: SearchRequest):
     ranked = rank_matches(current_profile, candidates, search_query=body.search_query)
 
     return ranked
+
+
+@router.post("/search-profiles")
+def search_profiles(body: SearchRequest):
+    """Vector search only — no Groq scoring. Returns profiles ordered by embedding similarity."""
+    query_embedding = generate_query_embedding(body.search_query)
+    candidates = _vector_search(query_embedding, body.current_user_id)
+    if not candidates:
+        candidates = _fetch_other_profiles(body.current_user_id)
+    return candidates
+
+
+@router.post("/score-pair")
+def score_pair(body: ScorePairRequest):
+    """Score compatibility between exactly two users using Groq. Fast single call."""
+    current_profile = _fetch_profile(body.current_user_id)
+    target_profile = _fetch_profile(body.target_user_id)
+
+    result = _score_candidate(current_profile, target_profile, search_query=None)
+    if result is None:
+        raise HTTPException(status_code=500, detail="Scoring failed")
+    return result
