@@ -49,7 +49,12 @@ def _fetch_other_profiles(user_id: str) -> list[dict]:
     return result.data or []
 
 
-def _vector_search(embedding: list[float], exclude_user_id: str, limit: int = TOP_K) -> list[dict]:
+def _vector_search(
+    embedding: list[float],
+    exclude_user_id: str,
+    limit: int = TOP_K,
+    min_similarity: float | None = None,
+) -> list[dict]:
     client = get_client()
     rpc_result = client.rpc(
         "match_profiles",
@@ -63,6 +68,14 @@ def _vector_search(embedding: list[float], exclude_user_id: str, limit: int = TO
     if not rows:
         return []
 
+    # Optionally filter by minimum similarity score
+    if min_similarity is not None:
+        rows = [r for r in rows if r.get("similarity", 0) >= min_similarity]
+    if not rows:
+        return []
+
+    # Preserve similarity ranking order
+    similarity_rank = {r["user_id"]: i for i, r in enumerate(rows)}
     user_ids = [r["user_id"] for r in rows]
     profiles_result = (
         client.table("profiles")
@@ -70,7 +83,9 @@ def _vector_search(embedding: list[float], exclude_user_id: str, limit: int = TO
         .in_("user_id", user_ids)
         .execute()
     )
-    return profiles_result.data or []
+    profiles = profiles_result.data or []
+    profiles.sort(key=lambda p: similarity_rank.get(p["user_id"], 999))
+    return profiles
 
 
 def _store_matches(current_user_id: str, matches: list[dict]) -> None:
@@ -129,10 +144,7 @@ def search_matches(body: SearchRequest):
 def search_profiles(body: SearchRequest):
     """Vector search only — no Groq scoring. Returns profiles ordered by embedding similarity."""
     query_embedding = generate_query_embedding(body.search_query)
-    candidates = _vector_search(query_embedding, body.current_user_id)
-    if not candidates:
-        candidates = _fetch_other_profiles(body.current_user_id)
-    return candidates
+    return _vector_search(query_embedding, body.current_user_id, min_similarity=0.35)
 
 
 @router.post("/score-pair")
