@@ -166,6 +166,46 @@ def search_profiles(body: SearchRequest):
     return combined
 
 
+@router.post("/refresh")
+def refresh_matches(body: ComputeRequest):
+    """Score only profiles not yet in the matches table, then return all matches sorted by score."""
+    current_profile = _fetch_profile(body.current_user_id)
+
+    embedding = current_profile.get("embedding")
+    if not embedding:
+        raise HTTPException(status_code=400, detail="No embedding. Run /profile/embed first.")
+
+    client = get_client()
+
+    # Find already-matched user IDs
+    existing = (
+        client.table("matches")
+        .select("matched_user_id")
+        .eq("user_id", body.current_user_id)
+        .execute()
+    )
+    already_matched = {r["matched_user_id"] for r in (existing.data or [])}
+
+    # Vector search → keep only new candidates
+    candidates = _vector_search(embedding, body.current_user_id)
+    new_candidates = [c for c in candidates if c["user_id"] not in already_matched]
+
+    new_count = len(new_candidates)
+    if new_candidates:
+        new_ranked = rank_matches(current_profile, new_candidates)
+        _store_matches(body.current_user_id, new_ranked)
+
+    # Return all matches sorted by score
+    all_matches = (
+        client.table("matches")
+        .select("*")
+        .eq("user_id", body.current_user_id)
+        .order("overall_score", desc=True)
+        .execute()
+    )
+    return {"matches": all_matches.data or [], "new_count": new_count}
+
+
 @router.post("/score-pair")
 def score_pair(body: ScorePairRequest):
     """Score compatibility between exactly two users using Groq. Fast single call."""

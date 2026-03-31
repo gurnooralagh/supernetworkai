@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Search, User, Zap, Loader2 } from "lucide-react";
+import { Search, User, Zap, Loader2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import ConnectModal from "@/components/ConnectModal";
 
@@ -66,6 +66,7 @@ const Discover = () => {
   // My Matches state
   const [matches, setMatches] = useState<Match[]>([]);
   const [loadingMatches, setLoadingMatches] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [connectTarget, setConnectTarget] = useState<{ id: string; name: string } | null>(null);
 
   // Search state
@@ -134,6 +135,34 @@ const Discover = () => {
 
     setMatches(enriched);
     setLoadingMatches(false);
+  };
+
+  const handleRefresh = async () => {
+    if (!userId) return;
+    setIsRefreshing(true);
+    try {
+      const res = await fetch(`${BACKEND_URL}/match/refresh`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ current_user_id: userId }),
+      });
+      if (!res.ok) throw new Error("Refresh failed");
+      const data = await res.json();
+      const newCount: number = data.new_count ?? 0;
+
+      // Re-fetch enriched matches from DB
+      await fetchMatches(userId);
+
+      if (newCount > 0) {
+        toast.success(`${newCount} new match${newCount === 1 ? "" : "es"} found!`);
+      } else {
+        toast.info("You're up to date — no new profiles to score.");
+      }
+    } catch {
+      toast.error("Refresh failed. Try again.");
+    } finally {
+      setIsRefreshing(false);
+    }
   };
 
   const handleSearch = async (e: React.FormEvent) => {
@@ -231,11 +260,26 @@ const Discover = () => {
 
           {/* ── MY MATCHES TAB ── */}
           <TabsContent value="my-matches" className="space-y-6">
-            <div>
-              <h2 className="text-2xl font-bold tracking-tight font-['Space_Grotesk']">Your Matches</h2>
-              <p className="text-muted-foreground text-sm mt-1">
-                People aligned with your goals, ranked by compatibility.
-              </p>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-2xl font-bold tracking-tight font-['Space_Grotesk']">Your Matches</h2>
+                <p className="text-muted-foreground text-sm mt-1">
+                  People aligned with your goals, ranked by compatibility.
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRefresh}
+                disabled={isRefreshing || loadingMatches}
+                className="shrink-0 mt-1"
+              >
+                {isRefreshing ? (
+                  <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> Refreshing…</>
+                ) : (
+                  <><RefreshCw className="h-4 w-4 mr-1.5" /> Refresh Matches</>
+                )}
+              </Button>
             </div>
 
             {loadingMatches ? (
